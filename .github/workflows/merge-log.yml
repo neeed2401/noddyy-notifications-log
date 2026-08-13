@@ -1,0 +1,134 @@
+name: Merge routine log into main
+
+# Each scheduled routine run pushes its rows to a claude/** session branch.
+# Those branches are cut from the default branch and never merge back, so the
+# rows fan out and main goes stale. This workflow folds every pushed branch's
+# notifications-log.csv back into main and then deletes the source branch.
+#
+# IMPORTANT: for `push` events GitHub reads the workflow file from the pushed
+# commit, not from main. So this file only runs if it exists on the claude/**
+# branch too -- which happens automatically once main is the repo's DEFAULT
+# branch, since routine branches are cut from the default branch.
+
+on:
+  push:
+    branches:
+      - 'claude/**'
+    paths:
+      - 'notifications-log.csv'
+
+permissions:
+  contents: write
+
+# Two runs racing to push main would leave one rejected as non-fast-forward.
+# Serialize them instead.
+concurrency:
+  group: merge-log
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    # A branch deletion also fires `push`; there is nothing to check out then.
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout pushed branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge into main and delete the source branch
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          HEADER_DEFAULT='Date,Run,Audience,Slot,Title,Description EN,Description HI,Description TE,Context Hook'
+
+          if [ "$BRANCH" = "main" ]; then
+            echo "Refusing to operate on main itself."
+            exit 1
+          fi
+
+          # Snapshot the pushed branch's CSV before switching away from it.
+          cp notifications-log.csv "$RUNNER_TEMP/branch.csv"
+
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Rebuild main's copy of the CSV from the two sides.
+          #   - strip CR: routine commits have arrived with CRLF, and a byte-exact
+          #     dedupe would otherwise keep both the CRLF and the LF copy of a row
+          #   - dedupe on a quote-insensitive key: the same row has arrived both
+          #     quoted and unquoted, which is identical CSV but different bytes
+          #   - main's rows keep their position, new rows append after them
+          # Line-based, so a quoted field containing a literal newline would break
+          # this. The generator does not emit those.
+          build_merged () {
+            local header=''
+            if [ -s "$RUNNER_TEMP/main.csv" ]; then
+              header=$(head -n 1 "$RUNNER_TEMP/main.csv" | tr -d '\r')
+            fi
+            if [ -z "$header" ] && [ -s "$RUNNER_TEMP/branch.csv" ]; then
+              header=$(head -n 1 "$RUNNER_TEMP/branch.csv" | tr -d '\r')
+            fi
+            [ -n "$header" ] || header="$HEADER_DEFAULT"
+
+            {
+              printf '%s\n' "$header"
+              {
+                [ -s "$RUNNER_TEMP/main.csv" ]   && tail -n +2 "$RUNNER_TEMP/main.csv"
+                [ -s "$RUNNER_TEMP/branch.csv" ] && tail -n +2 "$RUNNER_TEMP/branch.csv"
+                true
+              } | tr -d '\r' \
+                | awk 'NF { key = $0; gsub(/"/, "", key); if (!seen[key]++) print }'
+            } > notifications-log.csv
+          }
+
+          attempt=1
+          while [ "$attempt" -le 3 ]; do
+            # Land on main, creating it if the repo does not have one yet.
+            if git fetch origin main; then
+              git checkout -B main FETCH_HEAD
+            else
+              echo "main does not exist yet -- creating it from $BRANCH"
+              git checkout -B main
+            fi
+
+            if [ -f notifications-log.csv ]; then
+              cp notifications-log.csv "$RUNNER_TEMP/main.csv"
+            else
+              : > "$RUNNER_TEMP/main.csv"
+            fi
+
+            build_merged
+
+            before=$(tail -n +2 "$RUNNER_TEMP/main.csv" | tr -d '\r' | awk 'NF' | wc -l)
+            after=$(tail -n +2 notifications-log.csv | awk 'NF' | wc -l)
+            echo "main had $before data rows; merged file has $after"
+
+            git add notifications-log.csv
+            if git diff --cached --quiet; then
+              echo "No new rows from $BRANCH -- nothing to commit."
+              break
+            fi
+
+            git commit -m "log: merge $BRANCH"
+            if git push origin main; then
+              echo "Pushed main."
+              break
+            fi
+
+            echo "Push rejected (main moved). Retrying ($attempt/3)."
+            git reset --hard HEAD~1
+            attempt=$((attempt + 1))
+            if [ "$attempt" -gt 3 ]; then
+              echo "Could not push main after 3 attempts."
+              exit 1
+            fi
+          done
+
+          # Only remove the source branch once its rows are safely on main.
+          git push origin --delete "$BRANCH"
+          echo "Deleted $BRANCH."

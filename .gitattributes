@@ -1,0 +1,5 @@
+# Routine runs have committed this CSV with CRLF line endings. Stored that way,
+# a row pushed as "...errands\r" and the same row as "...errands" are different
+# bytes, so the merge dedupe keeps both. Pin the log to LF in the repository.
+* text=auto eol=lf
+notifications-log.csv text eol=lf
