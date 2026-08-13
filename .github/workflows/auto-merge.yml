@@ -1,0 +1,30 @@
+name: Auto-merge Claude routine PRs
+
+# Every scheduled routine run pushes its rows to a claude/*-prefixed branch
+# and opens a PR into main. This workflow squash-merges those PRs
+# automatically so notifications-log.csv accumulates without manual review,
+# and deletes the session branch afterward to keep the branch list clean.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    # Only auto-merge PRs coming from the routine's claude/* session branches
+    if: startsWith(github.head_ref, 'claude/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Squash-merge the routine PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh pr merge "${{ github.event.pull_request.number }}"
+          --repo "${{ github.repository }}"
+          --squash
+          --delete-branch
