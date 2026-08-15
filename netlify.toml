@@ -1,0 +1,26 @@
+# Static site: no build step, the repo root is published as-is.
+[build]
+  publish = "."
+
+  # Netlify's ignore command decides whether a build runs:
+  #   exit 0     -> build is cancelled
+  #   exit non-0 -> build proceeds
+  # Routine runs push to claude/** branches, which should never deploy.
+  # Only main does.
+  ignore = '[ "$BRANCH" != "main" ]'
+
+# Equivalent of Vercel's cleanUrls. Effectively a no-op today since the site
+# is a single index.html at the root, but keeps the behaviour if pages are added.
+[build.processing]
+  skip_processing = false
+
+[build.processing.html]
+  pretty_urls = true
+
+# The dashboard re-fetches this file every 5 minutes. Force a revalidation on
+# every request so a merged run shows up without waiting on a CDN cache.
+[[headers]]
+  for = "/notifications-log.csv"
+
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
