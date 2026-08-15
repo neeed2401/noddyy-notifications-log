@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noddyy Notification Log</title>
+<style>
+  :root {
+    --accent: #7C3AED;
+    --accent-soft: #F3EEFF;
+    --ink: #18181B;
+    --muted: #71717A;
+    --line: #E4E4E7;
+    --bg: #FAFAFA;
+    --card: #FFFFFF;
+    --helpers: #0F766E;
+    --helpers-soft: #E6F4F1;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 64px; }
+
+  header { margin-bottom: 20px; }
+
+  h1 {
+    font-size: 22px;
+    line-height: 1.25;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .count { color: var(--muted); font-size: 14px; margin: 0; }
+
+  .status {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    transition: background .15s, border-color .15s, color .15s;
+  }
+
+  .refresh { padding: 5px 12px; font-size: 13px; }
+  .refresh:hover { border-color: var(--accent); color: var(--accent); }
+  .refresh[disabled] { opacity: .55; cursor: default; }
+
+  /* Filters */
+  .filters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .chip { padding: 6px 13px; font-size: 13px; color: var(--muted); }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* Groups + cards */
+  .group { margin-bottom: 26px; }
+
+  .group-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .badge.helpers { background: var(--helpers-soft); color: var(--helpers); }
+
+  .slot { font-size: 12px; color: var(--muted); }
+
+  .copy {
+    margin-left: auto;
+    padding: 4px 11px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .copy:hover { border-color: var(--accent); color: var(--accent); }
+  .copy.done { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+  .title { font-weight: 700; margin-bottom: 6px; overflow-wrap: anywhere; }
+
+  .desc { color: #3F3F46; overflow-wrap: anywhere; }
+
+  .lang { display: flex; gap: 8px; margin-top: 5px; }
+  .lang:first-child { margin-top: 0; }
+
+  .lang-tag {
+    flex: 0 0 26px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: .04em;
+    padding-top: 4px;
+  }
+
+  .hook {
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px dashed var(--line);
+    font-size: 12px;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+
+  .notice {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 28px 18px;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .error {
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    color: #B91C1C;
+    border-radius: 10px;
+    padding: 10px 13px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+
+  [hidden] { display: none !important; }
+
+  @media (min-width: 640px) {
+    .wrap { padding: 32px 24px 72px; }
+    h1 { font-size: 26px; }
+    .filters { flex-direction: row; gap: 18px; }
+    .card { padding: 16px 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Noddyy Notification Log</h1>
+    <p class="count" id="count">Loading…</p>
+    <div class="status">
+      <span id="updated">—</span>
+      <button class="refresh" id="refresh" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <div class="error" id="error" hidden></div>
+
+  <div class="filters">
+    <div class="chips" id="filter-audience" role="group" aria-label="Filter by audience">
+      <button class="chip" type="button" data-value="All" aria-pressed="true">All</button>
+      <button class="chip" type="button" data-value="Users" aria-pressed="false">Users</button>
+      <button class="chip" type="button" data-value="Helpers" aria-pressed="false">Helpers</button>
+    </div>
+    <div class="chips" id="filter-run" role="group" aria-label="Filter by run">
+      <button class="chip" type="button" data-value="All" aria-pressed="true">All</button>
+      <button class="chip" type="button" data-value="Morning" aria-pressed="false">Morning</button>
+      <button class="chip" type="button" data-value="Evening" aria-pressed="false">Evening</button>
+    </div>
+  </div>
+
+  <main id="list" aria-live="polite"></main>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var CSV_URL = './notifications-log.csv';
+  var REFRESH_MS = 5 * 60 * 1000;
+
+  var rows = [];
+  var filters = { audience: 'All', run: 'All' };
+
+  var els = {
+    count: document.getElementById('count'),
+    updated: document.getElementById('updated'),
+    refresh: document.getElementById('refresh'),
+    error: document.getElementById('error'),
+    list: document.getElementById('list')
+  };
+
+  /* ---------- helpers ---------- */
+
+  function text(v) {
+    return v === null || v === undefined ? '' : String(v).trim();
+  }
+
+  function showError(msg) {
+    els.error.textContent = msg;
+    els.error.hidden = false;
+  }
+
+  function clearError() {
+    els.error.hidden = true;
+    els.error.textContent = '';
+  }
+
+  // Keep only rows we can render meaningfully; anything else is skipped
+  // rather than allowed to break the page.
+  function normalise(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+
+    var date = text(raw['Date']);
+    var run = text(raw['Run']);
+    var audience = text(raw['Audience']);
+    var title = text(raw['Title']);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+    if (!/^(morning|evening)$/i.test(run)) return null;
+    if (!/^(users|helpers)$/i.test(audience)) return null;
+    if (!title) return null;
+
+    var cap = function (s) {
+      return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+    };
+
+    return {
+      date: date,
+      run: cap(run),
+      audience: cap(audience),
+      slot: text(raw['Slot']),
+      title: title,
+      en: text(raw['Description EN']),
+      hi: text(raw['Description HI']),
+      te: text(raw['Description TE']),
+      hook: text(raw['Context Hook'])
+    };
+  }
+
+  // Build from Y/M/D parts so the date is not shifted by UTC parsing.
+  function groupLabel(date, run) {
+    var p = date.split('-');
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    if (isNaN(d.getTime())) return date + ' — ' + run;
+    var pretty = d.toLocaleDateString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric'
+    });
+    return pretty + ' — ' + run;
+  }
+
+  function stamp() {
+    els.updated.textContent = 'Updated ' + new Date().toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  /* ---------- copy ---------- */
+
+  function copyText(value) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(value).then(function () {
+        return true;
+      }, function () {
+        return legacyCopy(value);
+      });
+    }
+    return Promise.resolve(legacyCopy(value));
+  }
+
+  function legacyCopy(value) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = value;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /* ---------- rendering ---------- */
+
+  function langLine(tag, value) {
+    var line = document.createElement('div');
+    line.className = 'lang';
+
+    var label = document.createElement('span');
+    label.className = 'lang-tag';
+    label.textContent = tag;
+
+    var body = document.createElement('span');
+    body.className = 'desc';
+    body.textContent = value;
+
+    line.appendChild(label);
+    line.appendChild(body);
+    return line;
+  }
+
+  function buildCard(row) {
+    var card = document.createElement('article');
+    card.className = 'card';
+
+    var top = document.createElement('div');
+    top.className = 'card-top';
+
+    var badge = document.createElement('span');
+    badge.className = 'badge' + (row.audience === 'Helpers' ? ' helpers' : '');
+    badge.textContent = row.audience;
+    top.appendChild(badge);
+
+    if (row.slot) {
+      var slot = document.createElement('span');
+      slot.className = 'slot';
+      slot.textContent = 'Slot ' + row.slot;
+      top.appendChild(slot);
+    }
+
+    var btn = document.createElement('button');
+    btn.className = 'copy';
+    btn.type = 'button';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', function () {
+      var payload = 'Title: ' + row.title + ' / Description: ' + row.en;
+      copyText(payload).then(function (ok) {
+        if (!ok) return;
+        btn.textContent = 'Copied ✓';
+        btn.classList.add('done');
+        setTimeout(function () {
+          btn.textContent = 'Copy';
+          btn.classList.remove('done');
+        }, 1400);
+      });
+    });
+    top.appendChild(btn);
+
+    card.appendChild(top);
+
+    var title = document.createElement('div');
+    title.className = 'title';
+    title.textContent = row.title;
+    card.appendChild(title);
+
+    if (row.audience === 'Helpers') {
+      // Helpers get the three translations; blank ones are omitted so the
+      // card never shows an orphan label.
+      var langs = [['EN', row.en], ['HI', row.hi], ['TE', row.te]];
+      langs.forEach(function (pair) {
+        if (pair[1]) card.appendChild(langLine(pair[0], pair[1]));
+      });
+    } else if (row.en) {
+      var only = document.createElement('div');
+      only.className = 'desc';
+      only.textContent = row.en;
+      card.appendChild(only);
+    }
+
+    if (row.hook) {
+      var hook = document.createElement('div');
+      hook.className = 'hook';
+      hook.textContent = row.hook;
+      card.appendChild(hook);
+    }
+
+    return card;
+  }
+
+  function visibleRows() {
+    return rows.filter(function (r) {
+      if (filters.audience !== 'All' && r.audience !== filters.audience) return false;
+      if (filters.run !== 'All' && r.run !== filters.run) return false;
+      return true;
+    });
+  }
+
+  function render() {
+    var shown = visibleRows();
+    els.list.textContent = '';
+
+    els.count.textContent = shown.length === rows.length
+      ? rows.length + ' notification' + (rows.length === 1 ? '' : 's')
+      : shown.length + ' of ' + rows.length + ' notifications';
+
+    if (!shown.length) {
+      var empty = document.createElement('div');
+      empty.className = 'notice';
+      empty.textContent = rows.length
+        ? 'No notifications match these filters.'
+        : 'No notifications logged yet.';
+      els.list.appendChild(empty);
+      return;
+    }
+
+    // Group by Date + Run, newest first (Evening sits after Morning on a day).
+    var order = [];
+    var groups = {};
+
+    shown.forEach(function (r) {
+      var key = r.date + '|' + r.run;
+      if (!groups[key]) {
+        groups[key] = [];
+        order.push({ key: key, date: r.date, run: r.run });
+      }
+      groups[key].push(r);
+    });
+
+    order.sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      var rank = function (run) { return run === 'Evening' ? 1 : 0; };
+      return rank(b.run) - rank(a.run);
+    });
+
+    order.forEach(function (g) {
+      var section = document.createElement('section');
+      section.className = 'group';
+
+      var heading = document.createElement('h2');
+      heading.className = 'group-title';
+      heading.textContent = groupLabel(g.date, g.run);
+      section.appendChild(heading);
+
+      groups[g.key].forEach(function (r) {
+        section.appendChild(buildCard(r));
+      });
+
+      els.list.appendChild(section);
+    });
+  }
+
+  /* ---------- data ---------- */
+
+  function load() {
+    if (typeof Papa === 'undefined') {
+      showError('Could not load the CSV parser. Check your connection and refresh.');
+      els.count.textContent = '—';
+      return;
+    }
+
+    els.refresh.disabled = true;
+
+    fetch(CSV_URL + '?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      })
+      .then(function (csv) {
+        var parsed = Papa.parse(csv, {
+          header: true,
+          skipEmptyLines: true
+        });
+
+        var next = [];
+        (parsed.data || []).forEach(function (raw) {
+          var row = normalise(raw);
+          if (row) next.push(row);
+        });
+
+        rows = next;
+        clearError();
+        render();
+        stamp();
+      })
+      .catch(function (err) {
+        // Keep whatever is already on screen; just say the refresh failed.
+        showError('Could not load notifications-log.csv (' + err.message + ').');
+        if (!rows.length) {
+          els.count.textContent = '—';
+          render();
+        }
+      })
+      .then(function () {
+        els.refresh.disabled = false;
+      });
+  }
+
+  /* ---------- wiring ---------- */
+
+  function wireChips(id, key) {
+    var group = document.getElementById(id);
+    group.addEventListener('click', function (e) {
+      var btn = e.target.closest('.chip');
+      if (!btn) return;
+
+      filters[key] = btn.getAttribute('data-value');
+
+      Array.prototype.forEach.call(group.querySelectorAll('.chip'), function (c) {
+        c.setAttribute('aria-pressed', String(c === btn));
+      });
+
+      render();
+    });
+  }
+
+  wireChips('filter-audience', 'audience');
+  wireChips('filter-run', 'run');
+
+  els.refresh.addEventListener('click', load);
+
+  load();
+  setInterval(load, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
