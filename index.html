@@ -66,8 +66,10 @@
   }
 
   .refresh { padding: 0 16px; font-size: 14px; }
-  .refresh:hover { border-color: var(--accent); color: var(--accent); }
+  .refresh:hover:not([disabled]) { border-color: var(--accent); color: var(--accent); }
   .refresh[disabled] { opacity: .55; cursor: default; }
+
+  .export.done { border-color: var(--accent); background: var(--accent); color: #fff; }
 
   /* Sticky control bar: day navigation stays reachable while scrolling */
   .bar {
@@ -268,6 +270,7 @@
     <div class="status">
       <span id="updated">—</span>
       <button class="refresh" id="refresh" type="button">Refresh</button>
+      <button class="refresh export" id="export" type="button">Export CSV</button>
     </div>
   </header>
 
@@ -331,6 +334,7 @@
     count: document.getElementById('count'),
     updated: document.getElementById('updated'),
     refresh: document.getElementById('refresh'),
+    export: document.getElementById('export'),
     error: document.getElementById('error'),
     banner: document.getElementById('banner'),
     list: document.getElementById('list'),
@@ -544,6 +548,62 @@
     });
   }
 
+  /* ---------- export ---------- */
+
+  // Same order the cards are shown in: Morning before Evening, then by time.
+  function sortedDayRows() {
+    var rank = function (r) { return r.run === 'Evening' ? 1 : 0; };
+    return dayRows(selectedDate).slice().sort(function (a, b) {
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      var ta = rowTime(a), tb = rowTime(b);
+      if (ta !== tb) return ta < tb ? -1 : 1;
+      return Number(a.slot || 0) - Number(b.slot || 0);
+    });
+  }
+
+  function csvCell(value) {
+    var s = value === null || value === undefined ? '' : String(value);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function exportCsv() {
+    var shown = sortedDayRows();
+    if (!shown.length) return;
+
+    // Mirrors the source file's columns exactly, so an exported slice can be
+    // read by anything that reads notifications-log.csv.
+    var lines = ['Date,Run,Audience,Slot,Title,Description EN,Description HI,Description TE,Context Hook'];
+    shown.forEach(function (r) {
+      lines.push([r.date, r.run, r.audience, r.slot, r.title, r.en, r.hi, r.te, r.hook]
+        .map(csvCell).join(','));
+    });
+
+    // Leading BOM so Excel reads the Hindi, Telugu and emoji correctly.
+    var blob = new Blob(['﻿' + lines.join('\r\n') + '\r\n'],
+                        { type: 'text/csv;charset=utf-8;' });
+
+    var name = 'noddyy-notifications-' + selectedDate;
+    if (filters.audience !== 'All') name += '-' + filters.audience.toLowerCase();
+    if (filters.run !== 'All') name += '-' + filters.run.toLowerCase();
+    name += '.csv';
+
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+
+    els.export.textContent = 'Exported ✓';
+    els.export.classList.add('done');
+    setTimeout(function () {
+      els.export.textContent = 'Export CSV';
+      els.export.classList.remove('done');
+    }, 1400);
+  }
+
   function syncControls() {
     els.date.value = selectedDate || '';
     if (dates.length) {
@@ -554,6 +614,7 @@
     els.prev.disabled = !(i > 0);
     els.next.disabled = !(i > -1 && i < dates.length - 1);
     els.todayBtn.disabled = (selectedDate === todayISO());
+    els.export.disabled = (dayRows(selectedDate).length === 0);
   }
 
   function render() {
@@ -725,6 +786,7 @@
   });
 
   els.refresh.addEventListener('click', load);
+  els.export.addEventListener('click', exportCsv);
 
   // Desktop convenience: arrow keys page through days, as long as you are not
   // typing into the date field.
